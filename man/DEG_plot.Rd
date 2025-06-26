@@ -6,7 +6,8 @@
 \usage{
 DEG_plot(
   dt,
-  draw_non_regulated = FALSE,
+  draw_non_regulated = TRUE,
+  add_search_bar = TRUE,
   xlim = ifelse(two_dimensions, "bidir.max", "auto"),
   ylim = "bidir.max",
   xlab = ifelse(two_dimensions, "RNA fold change (log2)", "Mean counts (log2)"),
@@ -14,16 +15,20 @@ DEG_plot(
   two_dimensions = ifelse("LFC" \%in\% colnames(dt), FALSE, TRUE),
   color.values = c(`No change` = "black", Significant = "red", Buffering = "purple",
     `mRNA abundance` = "darkgreen", Expression = "blue", Forwarded = "yellow", Inverse =
-    "aquamarine", Translation = "orange4")
+    "aquamarine", Translation = "orange4"),
+  format = "png"
 )
 }
 \arguments{
 \item{dt}{a data.table with results from a differential
 expression run. Normally from: \code{ORFik::DTEG.analysis(df1, df2)}}
 
-\item{draw_non_regulated}{logical, default FALSE.
+\item{draw_non_regulated}{logical, default TRUE
 Should non-regulated rows be included in the plot?
 Will make the plot faster to render if skipped (FALSE)}
+
+\item{add_search_bar}{logical, default TRUE. Add a crosstalk search bar
+to search for genes in the plot}
 
 \item{xlim}{numeric vector or character preset, default:
 \code{ifelse(two_dimensions, "bidir.max", "auto")}
@@ -52,10 +57,11 @@ Log fold change vs mean counts}
 \item{color.values}{named character vector, default: \code{c("No change" = "black", "Significant" = "red",
 "Buffering" = "purple", "mRNA abundance" = "darkgreen",
 "Expression" = "blue", "Forwarded" = "yellow",
-"Inverse" = "aquamarine", "Translation" = "orange4")}}
+"Inverse" = "aquamarine", "Translation" = "orange4")}
+@param format character, default "png". Format for plotly bar.}
 }
 \value{
-plotly object
+plotly object or crosstalk bscols if add_search_bar is TRUE.
 }
 \description{
 Gives you interactive 1D or 2D DE plots

@@ -1,11 +1,17 @@
 
 #' Load a ORFik collection table
 #' @param path the path to gene counts
+#' @param grl a GRangesList, default attr(path, "range"),
+#' for new fst format, which range to get.
 #' @return a data.table in long format
 #' @importFrom fst read_fst
-load_collection <- function(path) {
-  table  <- fst::read_fst(path)
-  setDT(table)
+load_collection <- function(path, grl = attr(path, "range")) {
+  if (length(names(path)) > 0 && names(path) == "index") {
+    stopifnot(!is.null(grl))
+    table <- setnames(suppressWarnings(data.table::melt.data.table(coverageByTranscriptFST(grl, path)[[1]])),
+                      c("library", "count"))
+  } else table <- fst::read_fst(path, as.data.table = TRUE)
+
   table[, position := 1:.N, by = library]
   table[, `:=`(library, factor(library, levels = unique(library), ordered = TRUE))]
   return(table)
@@ -112,6 +118,7 @@ compute_collection_table_grouping <- function(metadata, df, metadata_field, tabl
   attr(ordering_vector, "meta_order") <- meta_order
   attr(ordering_vector, "other_columns") <- other_columns[meta_order, ]
   attr(ordering_vector, "xlab") <- colnames(all_metadata_fields)[1]
+  attr(ordering_vector, "runIDs") <- metadata[matchings, c("Run", "BioProject"), with = FALSE][valid_libs == TRUE,][meta_order,]
   return(ordering_vector)
 }
 
@@ -155,6 +162,8 @@ collection_to_wide <- function(table, value.var = "logscore") {
 #' If 2, means you should
 #' sort libraries on coverage in that region. If 4, means to sort on ratio
 #' of that region in this gene vs the other region in another gene.
+#' @param decreasing_order logical, default FALSE. Sort you ordering vector from lowest (default).
+#' If TRUE, sort from highest downwards.
 #' @return a data.table in long or wide (default) format, if as list, it is a
 #' list of size 2 (see argument as_list)
 compute_collection_table <- function(path, lib_sizes, df,
@@ -223,9 +232,9 @@ subset_fst_interval_sum <- function(ratio_interval, table) {
 
 subset_fst_coord_by_region <- function(df, id, region_type) {
   extend <- 650 # For yeast
+  region <- NULL
   subset <-
     if (region_type != "mrna") {
-
       if (organism(df) == "Saccharomyces cerevisiae") {
         region2 <- loadRegion(df, part = "cds", names.keep = id)
         gene_mrna <- extendTrailers(extendLeaders(region2, extend), extend)
@@ -242,8 +251,6 @@ subset_fst_coord_by_region <- function(df, id, region_type) {
         region <- unlistGrl(c(region, region2))
         region <- GRangesList(region)
         names(region) <- id
-        subset_coordinates_grl_to_ir(df, id = id, gene_mrna = gene_mrna,
-                                     subset = region)
       } else {
         if (organism(df) == "Saccharomyces cerevisiae" & region_type != "cds") {
           if (region_type == "leader") {
@@ -252,11 +259,62 @@ subset_fst_coord_by_region <- function(df, id, region_type) {
             region <- extendTrailers(GRangesList(stopSites(region2, TRUE, FALSE, FALSE)), extend)
           }
         } else region <- loadRegion(df, part = region_type, names.keep = id)
-        subset_coordinates_grl_to_ir(df, id = id, gene_mrna = gene_mrna,
-                                     subset = region)
+      }
+  }
+  if (!is.null(region)) {
+    subset <- subset_coordinates_grl_to_ir(df, id = id, gene_mrna = gene_mrna,
+                                 subset = region)
+    attr(subset, "region") <- region
+    attr(subset, "full_region") <- region
+
+  }
+  return(subset)
+}
+
+subset_tx_by_region <- function(df, id, region_type) {
+  extend <- 650 # For yeast
+  region <- region2 <- NULL
+  cds_annotation <- loadRegion(df, part = "cds")
+  if (organism(df) == "Saccharomyces cerevisiae") {
+    region <- region2 <- cds_annotation
+    gene_mrna <- extendTrailers(extendLeaders(region2, extend), extend)
+  } else region <- gene_mrna <- loadRegion(df, part = "tx")
+
+  is_mrna <- id %in% names(region)
+  if (!is_mrna) {
+    region <- gene_mrna <- loadRegion(df, part = "tx")[id]
+    if (organism(df) == "Saccharomyces cerevisiae") {
+      region <- gene_mrna <- extendTrailers(extendLeaders(region, extend), extend)
+    }
+  } else {
+    region <- region2 <- region[id]
+    gene_mrna <- gene_mrna[id]
+  }
+
+  subset <-
+    if (region_type != "mrna" && is_mrna) {
+      if (region_type == "leader+cds") {
+        if (organism(df) == "Saccharomyces cerevisiae") {
+          region <- extendLeaders(GRangesList(startSites(region2, TRUE, FALSE, FALSE)), extend)
+        } else {
+          region2 <- cds_annotation[id]
+          region <- loadRegion(df, part = "leaders", names.keep = id)
+        }
+
+        region <- unlistGrl(c(region, region2))
+        region <- GRangesList(region)
+        names(region) <- id
+      } else {
+        if (organism(df) == "Saccharomyces cerevisiae" & region_type != "cds") {
+          if (region_type == "leader") {
+            region <- extendLeaders(GRangesList(startSites(region2, TRUE, FALSE, FALSE)), extend)
+          } else if (region_type == "trailer") {
+            region <- extendTrailers(GRangesList(stopSites(region2, TRUE, FALSE, FALSE)), extend)
+          }
+        } else region <- loadRegion(df, part = region_type, names.keep = id)
       }
     }
-  return(subset)
+  return(list(region = region, gene_mrna = gene_mrna, cds_annotation = cds_annotation))
 }
 
 
@@ -287,16 +345,18 @@ subset_fst_by_interval <- function(table, subset) {
 #' Get collection directory
 #' @param df ORFik experiment
 #' @param must_exists logical, stop if dir does not exists
+#' @param new_format logical, TRUE is new or old fst format (FALSE)
 #' @return file.path(resFolder(df), "collection_tables")
 #' @export
 #' @examples
 #' df <- ORFik.template.experiment()
 #' collection_dir_from_exp(df)
 #'
-collection_dir_from_exp <- function(df, must_exists = FALSE) {
+collection_dir_from_exp <- function(df, must_exists = FALSE, new_format = TRUE) {
   table_dir <- file.path(resFolder(df), "collection_tables")
+  if (new_format) table_dir <- paste0(table_dir, "_indexed")
 
-  if (must_exists & !file.exists(table_dir))
+  if (must_exists & !dir.exists(table_dir))
     stop("There is no collection fst tables directory for this organism,",
          " see vignette for more information on how to make these.")
   return(table_dir)
@@ -305,11 +365,11 @@ collection_dir_from_exp <- function(df, must_exists = FALSE) {
 #' Get collection path
 #'
 #' For directory and id, must be fst format file
-#' @param df ORFik experiment
+#' @inheritParams collection_dir_from_exp
 #' @param id character, transcript ids
 #' @param gene_name_list a data.table, default NULL, with gene ids
-#' @param must_exists logical, stop if dir does not exists
 #' @param collection_dir = collection_dir_from_exp(df, must_exists)
+#' @param grl_all a GRangesList for new format, what genomic range to get.
 #' @return file.path(resFolder(df), "collection_tables")
 #' @export
 #' @examples
@@ -318,19 +378,29 @@ collection_dir_from_exp <- function(df, must_exists = FALSE) {
 #' collection_path_from_exp(df, id = tx_id, must_exists = FALSE)
 collection_path_from_exp <- function(df, id, gene_name_list = NULL,
                                      must_exists = TRUE,
-                                     collection_dir = collection_dir_from_exp(df, must_exists)) {
-  table_path <- file.path(collection_dir, paste0(id, ".fst"))
-  if (must_exists && !file.exists(table_path)) {
-    all_ids_print <- "None"
-    if (!is.null(gene_name_list)) {
-      all_ids <- gene_name_list[label == gene_name_list[value == id,]$label,]$value
-      all_ids_paths <- file.path(collection_dir, paste0(all_ids, ".fst"))
-      all_ids <- all_ids[file.exists(all_ids_paths)]
-      if (length(all_ids) > 0) {
-        all_ids_print <- paste(all_ids, collapse = ", ")
+                                     collection_dir = collection_dir_from_exp(df, must_exists),
+                                     grl_all = loadRegion(df)) {
+  index <- file.path(collection_dir, "coverage_index.fst")
+  if (file.exists(index)) {
+    table_path <- index
+    names(table_path) <- "index"
+    attr(table_path, "range") <- grl_all[id]
+  } else {
+    table_path <- file.path(collection_dir, paste0(id, ".fst"))
+    names(table_path) <- "old_format"
+    if (must_exists && !file.exists(table_path)) {
+      all_ids_print <- "None"
+      if (!is.null(gene_name_list)) {
+        all_ids <- gene_name_list[label == gene_name_list[value == id,]$label,]$value
+        all_ids_paths <- file.path(collection_dir, paste0(all_ids, ".fst"))
+        all_ids <- all_ids[file.exists(all_ids_paths)]
+        if (length(all_ids) > 0) {
+          all_ids_print <- paste(all_ids, collapse = ", ")
+        }
       }
+      stop("Gene isoform has no precomputed table, existing isoforms: ", all_ids_print)
     }
-    stop("Gene isoform has no precomputed table, existing isoforms: ", all_ids_print)
   }
+
   return(table_path)
 }

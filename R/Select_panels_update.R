@@ -97,10 +97,9 @@ tx_from_gene_list <- function(gene_name_list, gene = NULL, selected = NULL,
   return(isoforms)
 }
 
-frame_type_update_select <- function(selected) {
+frame_type_update_select <- function(selected, id = "frames_type") {
   updateSelectizeInput(
-    inputId = "frames_type",
-    label = "Select frames display type",
+    inputId = id,
     choices = c("lines", "columns", "stacks", "area", "heatmap"),
     selected = selected
   )
@@ -113,6 +112,24 @@ library_update_select <- function(libs, selected = isolate(libs()[1]),
     choices = libs(),
     selected = selected,
     server = TRUE
+  )
+}
+
+library_update_select_safe <- function(libs, selected = libs[1],
+                                  id = "library") {
+  updateSelectizeInput(
+    inputId = id,
+    choices = libs,
+    selected = selected,
+    server = TRUE
+  )
+}
+
+factor_update_select <- function(factor) {
+  updateSelectizeInput(
+    inputId = "factor",
+    choices = factor(),
+    selected = factor()[1]
   )
 }
 

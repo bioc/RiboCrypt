@@ -121,7 +121,8 @@ multiOmicsPlot_list <- function(display_range, annotation = display_range, refer
 #' cds <- loadRegion(df, "cds")
 #' mrna <- loadRegion(df, "mrna")
 #' multiOmicsPlot_animate(mrna[1], annotation = cds[1], reference_sequence = findFa(df),
-#'                     frames_type = "columns", leader_extension = 30, trailer_extension = 30, withFrames = c(T, T),
+#'                     frames_type = "columns", leader_extension = 30, trailer_extension = 30,
+#'                     withFrames = c(TRUE, TRUE),
 #'                     reads = outputLibs(df, type = "pshifted", output.mode = "envirlist",
 #'                                   naming = "full", BPPARAM = BiocParallel::SerialParam()))
 multiOmicsPlot_animate <- function(display_range, annotation = display_range, reference_sequence,
@@ -170,7 +171,6 @@ multiOmicsPlot_animate <- function(display_range, annotation = display_range, re
                         reads, withFrames, kmers,  SIMPLIFY = FALSE, BPPARAM = BPPARAM)
 
   profiles <- rbindlist(profiles, idcol = "file")
-
   plot <- list(getPlotAnimate(profiles, withFrames = withFrames[1],
                          colors = colors[1], ylabels = ylabels[1], lines = lines))
 

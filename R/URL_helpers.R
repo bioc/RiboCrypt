@@ -25,7 +25,9 @@ getHostFromURL <- function(session) {
   } else if (host == "ribocrypt.neutrino.re") {
     host <- paste0("https://", host, "/app/ribocrypt")
   } else { # Else local user / other server
-    host <- paste0("http://", host, ":", session$clientData$url_port)
+    port <- session$clientData$url_port
+    pathname <- sub("/$", "", session$clientData$url_pathname)
+    host <- paste0("http://", host, ":", port, pathname)
   }
   return(host)
 }
@@ -39,6 +41,7 @@ make_url_from_inputs_parameters <-function(input, go = TRUE, settings = "/?") {
         paste("frames_type", input$frames_type, sep = "="),
         paste("kmer", input$kmer, sep = "="),
         paste("log_scale", input$log_scale, sep = "="),
+        paste("log_scale_protein", input$log_scale_protein, sep = "="),
         paste("extendLeaders", input$extendLeaders, sep = "="),
         paste("extendTrailers", input$extendTrailers, sep = "="),
         paste("viewMode", input$viewMode, sep = "="),
@@ -50,6 +53,9 @@ make_url_from_inputs_parameters <-function(input, go = TRUE, settings = "/?") {
         paste("customSequence", input$customSequence, sep = "="),
         paste("phyloP", input$phyloP, sep = "="),
         paste("summary_track", input$summary_track, sep = "="),
+        paste("summary_track_type", input$summary_track_type, sep = "="),
+        paste("collapsed_introns_width", input$collapsed_introns_width, sep = "="),
+        paste("collapsed_introns", input$collapsed_introns, sep = "="),
         paste("go", go, sep = "="),
         sep = "&"))
 }
@@ -203,11 +209,13 @@ check_url_for_basic_parameters <- function() {
         print(isolate(input$library))
       }
 
-      tag <- "frames_type"
-      value <- query[tag][[1]]
-      if (!is.null(value)) {
-        frame_type_update_select(value)
+      for (tag in c("frames_type", "summary_track_type")) {
+        value <- query[tag][[1]]
+        if (!is.null(value)) {
+          frame_type_update_select(value, tag)
+        }
       }
+
       tag <- "kmer"
       value <- query[tag][[1]]
       if (!is.null(value)) {
@@ -215,7 +223,7 @@ check_url_for_basic_parameters <- function() {
       }
 
       # Numeric box updates
-      for (tag in c("extendLeaders", "extendTrailers")) {
+      for (tag in c("extendLeaders", "extendTrailers", "collapsed_introns_width")) {
         value <- query[tag][[1]]
         if (!is.null(value)) {
           updateNumericInput(inputId = tag, value = value)
@@ -231,7 +239,9 @@ check_url_for_basic_parameters <- function() {
       }
 
       # Checkbox updates
-      for (tag in c("viewMode", "other_tx", "add_uorfs", "add_translon","summary_track", "log_scale", "phyloP")) {
+      for (tag in c("viewMode", "other_tx", "add_uorfs", "add_translon","summary_track",
+                    "log_scale", "log_scale_protein","phyloP", "collapsed_introns",
+                    "summary_track")) {
         value <- query[tag][[1]]
         if (!is.null(value)) {
           updateCheckboxInput(inputId = tag, value = as.logical(value))
@@ -347,6 +357,7 @@ browseRC <- function(symbol = NULL, gene_id = NULL, tx_id = NULL,
 #' @param viewMode FALSE (transcript view), TRUE gives genomic.
 #' @param other_tx FALSE, show all other annotation in region (isoforms etc.)
 #' @param kmer integer, default 1 (no binning), binning size of windows, to smear out the signal.
+#' @param add_translons logical, default FALSE. If TRUE, add translons predicted sequences in annotation.
 #' @param zoom_range character, zoom values.
 #' @param host url, default "https://ribocrypt.org". Set to localhost for local version.
 #' @return character, URL.

@@ -34,7 +34,8 @@
 #' @importFrom shinycssloaders withSpinner
 #' @importFrom markdown mark_html
 #' @importFrom shinyjqui jqui_resizable jqui_draggable
-#' @importFrom shinyjs click useShinyjs
+#' @importFrom shinyjs click useShinyjs hideElement showElement
+#' @importFrom shinyWidgets prettySwitch
 #' @importFrom knitr knit
 #' @importFrom stringr str_sub str_count
 #' @importFrom httr GET write_disk
@@ -76,9 +77,9 @@ RiboCrypt_app <- function(
     metadata = NULL, all_exp_meta = all_exp[grep("all_samples-", name),]) {
 
   rc_parameter_setup()
-
   # User interface
   ui <- tagList(
+    rc_header_styling(),
     rc_header_image(),
     helper_button_redirect_call(),
     navbarPage(
@@ -89,9 +90,10 @@ RiboCrypt_app <- function(
       theme = rc_theme(),
       selected = init_tab_focus,
       browser_ui("browser", all_exp, browser_options, names_init, libs),
-      browser_allsamp_ui("browser_allsamp", all_exp_meta, browser_options, metadata),
-      analysis_ui("Analysis", all_exp, browser_options, libs, metadata, all_exp_meta),
-      metadata_ui("metadata", all_exp),
+      browser_allsamp_ui("browser_allsamp", all_exp_meta, browser_options, metadata,
+                         names_init_meta),
+      analysis_ui("Analysis", all_exp, browser_options, libs, metadata),
+      metadata_ui("metadata", all_exp, all_exp_meta),
       tutorial_ui("tutorial")
   ))
   cat("Done (UI setup):"); print(round(Sys.time() - time_before, 2))
@@ -107,12 +109,11 @@ RiboCrypt_app <- function(
                          browser_options)
     if (nrow(all_exp_meta) > 0) {
       browser_allsamp_server("browser_allsamp", all_exp_meta, df_meta, metadata,
-                             names_init, browser_options)
+                             names_init_meta, browser_options)
     } else print("No MegaBrowser exps given, ignoring MegaBrowser server.")
     rv <- analysis_server("Analysis", all_exp, without_readlengths_env,
             with_readlengths_env, df, df_with, experiments, tx, cds, libs, org,
-            gene_name_list, rv, metadata, all_exp_meta, exp_init_meta, df_meta,
-            names_init, browser_options)
+            gene_name_list, rv, metadata, names_init, browser_options)
     metadata_server("metadata", all_exp, metadata)
     cat("Server this: "); print(round(Sys.time() - this_time_before, 2))
     cat("Server total: "); print(round(Sys.time() - time_before, 2))
