@@ -20,7 +20,7 @@
 #'  should be "" for local users.
 #' @return the plot object
 #' @importFrom GenomicFeatures extractTranscriptSeqs seqlevels<-
-#' @importFrom GenomeInfoDb seqlevels
+#' @importFrom Seqinfo seqlevels
 #' @importFrom GenomicRanges GRangesList mcols
 #' @importFrom htmlwidgets onRender
 #' @export

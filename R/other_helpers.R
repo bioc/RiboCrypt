@@ -54,7 +54,7 @@ findPatterns <- function(patterns, sequence, frame = c(0,1,2), max_dist = NULL, 
 #' @param matches integer vector, indices
 #' @param ref_granges GRanges
 #' @return GRanges object
-#' @importFrom GenomeInfoDb seqnames
+#' @importFrom Seqinfo seqnames
 #' @importFrom GenomicRanges GRanges
 #' @importFrom IRanges IRanges
 #' @keywords internal
