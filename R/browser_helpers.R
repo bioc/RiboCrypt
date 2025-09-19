@@ -103,9 +103,9 @@ multiOmicsPlot_complete_plot <- function(track_panel, bottom_panel, display_rang
                            automateTicksX(seq_panel)))
   }
 
-  if (!is.null(custom_seq_panel)) {
-    plots <- c(plots, list(automateTicksX(custom_seq_panel)))
-    nplots_all <- nplots + 1
+  if (length(custom_seq_panel) > 0) {
+    plots <- c(plots, lapply(custom_seq_panel, automateTicksX))
+    nplots_all <- nplots + length(custom_seq_panel)
   } else nplots_all <- nplots
 
   plots <- lapply(plots, function(x) x  %>% layout(xaxis = list(title = list(font = list(size = 22)), tickfont = list(size = 16)),
@@ -289,7 +289,7 @@ hash_strings_browser <- function(input, dff, ciw = input$collapsed_introns_width
                        input$extendTrailers, input$extendLeaders,
                        input$genomic_region, input$viewMode,
                        ciw,
-                       input$customSequence, input$phyloP,
+                       input$customSequence, input$phyloP, input$mapability,
                        collapse = "|_|")
   # Until plot and coverage is split (bottom must be part of browser hash)
   hash_browser <- paste(hash_bottom,
@@ -298,6 +298,7 @@ hash_strings_browser <- function(input, dff, ciw = input$collapsed_introns_width
                         input$summary_track, input$summary_track_type,
                         input$kmer, input$frames_type, input$withFrames,
                         input$log_scale, input$zoom_range, input$frames_subset,
+                        input$unique_align,
                         collapse = "|_|")
   hash_expression <- paste(full_names, input$tx,
                            input$expression_plot, input$extendTrailers,

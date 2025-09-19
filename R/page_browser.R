@@ -9,6 +9,7 @@ browser_ui <- function(id, all_exp, browser_options, gene_names_init,
   viewMode <- browser_options["default_view_mode"] == "genomic"
   introns_width <- as.numeric(browser_options["collapsed_introns_width"])
   full_annotation <- as.logical(browser_options["full_annotation"])
+  translons <- as.logical(browser_options["translons"])
   panel_hidden_or_not_class <- ifelse(browser_options["hide_settings"] == "TRUE",
                                       "floating_settings_panel hidden",
                                       "floating_settings_panel")
@@ -40,6 +41,8 @@ browser_ui <- function(id, all_exp, browser_options, gene_names_init,
                          column(1, actionButton(ns("select_all_btn"), "", icon = icon("check"),
                                                 class = "btn btn-sm btn-primary", title = "Select all"))
                        ),
+                       fluidRow(prettySwitch(ns("unique_align"), "Unique alignments", value = FALSE,
+                                    status = "success", fill = TRUE, bigger = TRUE)),
                        fluidRow(
                          column(6, frame_type_select(ns, selected = browser_options["default_frame_type"])),
                          column(6, sliderInput(ns("kmer"), "K-mer length", min = 1, max = 20,
@@ -59,7 +62,7 @@ browser_ui <- function(id, all_exp, browser_options, gene_names_init,
                                 ),
                                 fluidRow(
                                   checkboxInput(ns("add_uorfs"), "uORF annotation", FALSE),
-                                  checkboxInput(ns("add_translon"), "Predicted translons", FALSE),
+                                  checkboxInput(ns("add_translon"), "Predicted translons", translons),
                                   ),
                                 fluidRow(checkboxInput(ns("log_scale"), "Log scale", FALSE),
                                          checkboxInput(ns("log_scale_protein"), "Log scale Protein", FALSE)
@@ -67,8 +70,9 @@ browser_ui <- function(id, all_exp, browser_options, gene_names_init,
                                 fluidRow(
                                   column(4, checkboxInput(ns("expression_plot"), "Gene expression plot", FALSE)),
                                   column(4, checkboxInput(ns("useCustomRegions"), "Protein structures", TRUE)),
-                                  column(4, checkboxInput(ns("phyloP"), "Conservation (phyloP)", FALSE))
                                 ),
+                                fluidRow(column(4, checkboxInput(ns("phyloP"), "Conservation (phyloP)", FALSE)),
+                                         column(4, checkboxInput(ns("mapability"), "Mapability (28mers)", FALSE))),
                                 fluidRow(
                                   column(6, checkboxInput(ns("withFrames"), "Split color Frames", TRUE)),
                                   column(6, frame_subsetter_select(ns))
@@ -101,7 +105,7 @@ browser_ui <- function(id, all_exp, browser_options, gene_names_init,
       column(12,
              jqui_resizable(plotlyOutput(ns("c"), height = "500px")) %>% shinycssloaders::withSpinner(color="#0dc5c1"),
              plotlyOutput(ns("e"), height = "50px"),
-             uiOutput(ns("variableUi")),
+             uiOutput(ns("proteinStruct")),
              plotlyOutput(ns("d")) %>% shinycssloaders::withSpinner(color="#0dc5c1")
       )
     )
@@ -120,9 +124,24 @@ browser_server <- function(id, all_experiments, env, df, experiments,
       output$clip <- renderUI({clipboard_url_button(input, session)})
 
       # Main plot controller, this code is only run if 'plot' is pressed
-      mainPlotControls <- eventReactive(input$go,
+      kickoff <- reactiveVal(FALSE)
+      fired <- reactiveVal(FALSE)
+      observeEvent(list(input$gene, input$tx), {
+        if (fired()) return()
+        if (!isTRUE(as.logical(browser_options[["plot_on_start"]]))) {
+          fired(TRUE)
+          return()
+        }
+        if (!nzchar(input$gene) || !nzchar(input$tx)) return()
+        if (!identical(input$gene, browser_options[["default_gene"]])) return()
+        if (!identical(input$tx,   browser_options[["default_isoform"]])) return()
+        fired(TRUE)
+        kickoff(TRUE)
+      }, ignoreInit = TRUE, ignoreNULL = TRUE)
+
+      mainPlotControls <- eventReactive(list(input$go, kickoff()),
         click_plot_browser_main_controller(input, tx, cds, libs, df),
-        ignoreInit = check_plot_on_start(browser_options),
+        ignoreInit = TRUE,
         ignoreNULL = FALSE)
 
       bottom_panel <- reactive(bottom_panel_shiny(mainPlotControls))  %>%

@@ -6,7 +6,8 @@
 #' @return a data.table in long format
 #' @importFrom fst read_fst
 load_collection <- function(path, grl = attr(path, "range")) {
-  if (length(names(path)) > 0 && names(path) == "index") {
+  new_format <- length(names(path)) > 0 && names(path) == "index"
+  if (new_format) {
     stopifnot(!is.null(grl))
     table <- setnames(suppressWarnings(data.table::melt.data.table(coverageByTranscriptFST(grl, path)[[1]])),
                       c("library", "count"))
@@ -66,8 +67,7 @@ match_collection_to_exp <- function(metadata, df) {
 
 filter_collection_on_count <- function(table, min_count) {
   if (min_count > 0) {
-    lib_names <- unique(table$library)
-    libs_counts_total <- table[,.(count = sum(count)),library][, valid := count >= min_count]
+    libs_counts_total <- table[,.(count = sum(count)), library][, valid := count >= min_count]
     valid_libs <- libs_counts_total$valid
     if (sum(valid_libs) == 0)
       stop("Count filter too strict, no libraries with that much reads for this transcript!")
@@ -76,7 +76,8 @@ filter_collection_on_count <- function(table, min_count) {
     table <- table[library %in% filt_libs]
     table[, library := factor(library, levels = unique(library), ordered = TRUE)]
     setattr(table, "valid_libs", valid_libs)
-  }
+  } else setattr(table, "valid_libs", rep(TRUE, length(unique(table$library))))
+
   return(table)
 }
 
@@ -381,7 +382,8 @@ collection_path_from_exp <- function(df, id, gene_name_list = NULL,
                                      collection_dir = collection_dir_from_exp(df, must_exists),
                                      grl_all = loadRegion(df)) {
   index <- file.path(collection_dir, "coverage_index.fst")
-  if (file.exists(index)) {
+  new_format_exists <- file.exists(index)
+  if (new_format_exists) {
     table_path <- index
     names(table_path) <- "index"
     attr(table_path, "range") <- grl_all[id]

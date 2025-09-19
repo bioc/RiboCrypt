@@ -44,13 +44,14 @@ click_plot_browser_main_controller <- function(input, tx, cds, libs, df) {
     }
 
     dff <- observed_exp_subset(isolate(input$library), libs, df)
+    if (nrow(dff) > 200) stop("Browser only supports up to 200 libraries for now, use megabrowser!")
     if (isolate(input$withFrames)) {
       withFrames <- libraryTypes(dff, uniqueTypes = FALSE) %in% c("RFP", "RPF", "LSU", "TI")
     } else withFrames <- rep(FALSE, nrow(dff))
 
     # Hash strings for cache
     hash_strings <- hash_strings_browser(input, dff, collapsed_introns_width)
-
+    if (input$unique_align) uniqueMappers(dff) <- TRUE
     reads <- try(filepath(dff, "bigwig", suffix_stem = c("_pshifted", "")))
     invalid_reads <- is(reads, "try-error") ||
       (!all(file.exists(unlist(reads, use.names = FALSE))) |
@@ -86,6 +87,7 @@ click_plot_browser_main_controller <- function(input, tx, cds, libs, df) {
                    withFrames = withFrames,
                    zoom_range = zoom_range,
                    frames_subset = frames_subset,
+                   mapability = input$mapability,
                    hash_bottom = hash_strings[["hash_bottom"]],
                    hash_browser = hash_strings[["hash_browser"]],
                    hash_expression = hash_strings[["hash_expression"]])
@@ -114,9 +116,12 @@ click_plot_browser_allsamp_controller <- function(input, df, gene_name_list) {
                                               annotation_list$cds_annotation,
                                               isolate(input$other_tx))
     # browser()
+
+
     if (!is.null(motif) && motif != "") {
       table_path <- meta_motif_files(dff)[motif]
       display_annot <- FALSE
+      collapsed_introns_width <- 0
       message("Using motif: ", table_path)
     } else {
       collapsed_introns_width <- input$collapsed_introns_width
@@ -166,6 +171,7 @@ click_plot_browser_allsamp_controller <- function(input, df, gene_name_list) {
     normalization <- isolate(input$normalization)
     kmer <- isolate(input$kmer)
     min_count <- isolate(input$min_count)
+    if (!isTruthy(min_count)) min_count <- 0
     frame <- isolate(input$frame)
     summary_track <- isolate(input$summary_track)
 
@@ -350,10 +356,11 @@ click_plot_codon_main_controller <- function(input, tx, cds, libs, df, length_ta
   differential <- input$differential
   exclude_start_stop <- input$exclude_start_stop
   ratio_thresh <- input$ratio_thresh
+  plot_export_format <- isolate(input$plot_export_format)
 
   hash_string <- paste(name(dff), names, filter_value, sep = "|__|")
   hash_string_plot <- paste(hash_string, normalization, differential,
-                            exclude_start_stop, ratio_thresh, sep = "|__|")
+                            exclude_start_stop, ratio_thresh, plot_export_format, sep = "|__|")
   if (differential & length(names) == 1) stop("For differential mode you need at least 2 libraries!")
 
   cat("Library loading: "); print(round(Sys.time() - time_before, 2))
@@ -367,6 +374,7 @@ click_plot_codon_main_controller <- function(input, tx, cds, libs, df, length_ta
                  differential = differential,
                  ratio_thresh = ratio_thresh,
                  exclude_start_stop = exclude_start_stop,
+                 plot_export_format = plot_export_format,
                  hash_string = hash_string,
                  hash_string_plot = hash_string_plot)
 }
