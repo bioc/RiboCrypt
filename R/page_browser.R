@@ -1,70 +1,118 @@
-browser_ui = function(id,  all_exp, browser_options, gene_names_init,
-                      libs, label = "Browser") {
+browser_ui <- function(id, all_exp, browser_options, gene_names_init,
+                       libs, label = "Browser") {
 
   ns <- NS(id)
   genomes <- unique(all_exp$organism)
   experiments <- all_exp$name
-  # TODO: move init_tx and init_libs to setup module
   all_isoforms <- subset(gene_names_init, label == browser_options["default_gene"])
   init_libs <- unlist(strsplit(browser_options["default_libs"], "\\|"))
   viewMode <- browser_options["default_view_mode"] == "genomic"
-  copy_button_formatting <- tags$head(
-    tags$style(HTML('#clip{background-color:orange}'))
-  )
-
+  introns_width <- as.numeric(browser_options["collapsed_introns_width"])
+  full_annotation <- as.logical(browser_options["full_annotation"])
+  translons <- as.logical(browser_options["translons"])
+  panel_hidden_or_not_class <- ifelse(browser_options["hide_settings"] == "TRUE",
+                                      "floating_settings_panel hidden",
+                                      "floating_settings_panel")
   tabPanel(
-    tags$head(includeHTML(system.file("google_analytics_html",
-                                      "google_analytics.html", package = "RiboCrypt"))),
     title = "browser", icon = icon("chart-line"),
-    sidebarLayout(
-      jqui_resizable(sidebarPanel(
-        tabsetPanel(
-          tabPanel("Browser",
-                   organism_input_select(c("ALL", genomes), ns),
-                   experiment_input_select(experiments, ns, browser_options),
-                   gene_input_select(ns, FALSE, browser_options),
-                   tx_input_select(ns, FALSE, all_isoforms, browser_options["default_isoform"]),
-                   library_input_select(ns, TRUE, libs, init_libs),
-                   frame_type_select(ns, selected =
-                                       browser_options["default_frame_type"]),
-                   sliderInput(ns("kmer"), "K-mer length", min = 1, max = 20,
-                          value = as.numeric(browser_options["default_kmer"])),
-                   shinyjs::useShinyjs(),
-                   rclipboardSetup(),
-                   copy_button_formatting
-          ),
-          tabPanel("Settings",
-                   numericInput(ns("extendLeaders"), "5' extension", 0),
-                   numericInput(ns("extendTrailers"), "3' extension", 0),
-                   textInput(ns("customSequence"), label = "Custom sequences highlight", value = NULL),
-                   textInput(ns("genomic_region"), label = "Genomic region", value = NULL),
-                   textInput(ns("zoom_range"), label = "Zoom interval", value = NULL),
-                   checkboxInput(ns("viewMode"), label = "Genomic View", value = viewMode),
-                   checkboxInput(ns("other_tx"), label = "Full annotation", value = FALSE),
-                   checkboxInput(ns("add_uorfs"), label = "uORF annotation", value = FALSE),
-                   checkboxInput(ns("add_translon"), label = "Predicted translons", value = FALSE),
-                   checkboxInput(ns("log_scale"), label = "Log Scale", value = FALSE),
-                   checkboxInput(ns("expression_plot"), label = "Add expression plot", value = FALSE),
-                   checkboxInput(ns("useCustomRegions"), label = "Protein structures", value = TRUE),
-                   checkboxInput(ns("phyloP"), label = "phyloP", value = FALSE),
-                   checkboxInput(ns("withFrames"), label = "Split color Frames", value = TRUE),
-                   checkboxInput(ns("summary_track"), label = "Summary top track", value = FALSE),
-                   frame_type_select(ns, "summary_track_type", "Select summary display type"),
-                   frame_subsetter_select(ns),
-                   uiOutput(ns("clip")),
-                   export_format_of_plot(ns)
-          )
-        ),
-         actionButton(ns("go"), "Plot", icon = icon("rocket")), width=3
-      )),
-      mainPanel(
-        jqui_resizable(plotlyOutput(outputId = ns("c"), height = "500px")) %>% shinycssloaders::withSpinner(color="#0dc5c1"),
-        plotlyOutput(outputId = ns("e"), height = "50px"),
-        uiOutput(ns("variableUi"),),
-        plotlyOutput(outputId = ns("d")) %>% shinycssloaders::withSpinner(color="#0dc5c1"), width=9)
+    shinyjs::useShinyjs(),
+    rclipboardSetup(),
+    tags$head(includeHTML(system.file("google_analytics_html", "google_analytics.html", package = "RiboCrypt"))),
+    # ---- HEAD with floating settings style ----
+    browser_ui_settings_style(),
+    # ---- Floating Settings Panel ----
+    fluidRow(
+      column(1, div(style = "position: relative;",
+        actionButton(ns("toggle_settings"), "", icon = icon("sliders-h"),
+                     style = "color: #fff; background-color: rgba(0,123,255,0.6); border-color: rgba(0,123,255,1); font-weight: bold;"),
+
+        # Floating settings panel overlays and drops down
+        div(id = ns("floating_settings"),
+            class = panel_hidden_or_not_class,  # Add a custom class
+            style = "position: absolute; top: 100%; left: 0; z-index: 10; background-color: white; padding: 10px; border: 1px solid #ddd; border-radius: 6px; width: max-content; min-width: 300px; box-shadow: 0px 4px 10px rgba(0,0,0,0.1);",
+            tabsetPanel(
+              tabPanel("Browser",
+                       fluidRow(
+                         column(6, organism_input_select(c("ALL", genomes), ns)),
+                         column(6, experiment_input_select(experiments, ns, browser_options))
+                       ),
+                       fluidRow(
+                         column(11, library_input_select(ns, TRUE, libs, init_libs)),
+                         column(1, actionButton(ns("select_all_btn"), "", icon = icon("check"),
+                                                class = "btn btn-sm btn-primary", title = "Select all"))
+                       ),
+                       fluidRow(prettySwitch(ns("unique_align"), "Unique alignments", value = FALSE,
+                                    status = "success", fill = TRUE, bigger = TRUE)),
+                       fluidRow(
+                         column(6, frame_type_select(ns, selected = browser_options["default_frame_type"])),
+                         column(6, sliderInput(ns("kmer"), "K-mer length", min = 1, max = 20,
+                                               value = as.numeric(browser_options["default_kmer"])))
+                       )
+              ),
+              tabPanel("Settings",
+                                fluidRow(
+                                  numericInput(ns("extendLeaders"), "5' extension", 0),
+                                  numericInput(ns("extendTrailers"), "3' extension", 0),
+                                  numericInput(ns("collapsed_introns_width"), "Collapse Introns (nt flanks)",
+                                               introns_width)
+                                ),
+                                fluidRow(textInput(ns("genomic_region"), "Genomic region", ""),
+                                         textInput(ns("zoom_range"), "Zoom interval", ""),
+                                         textInput(ns("customSequence"), "Custom sequences highlight", "")
+                                ),
+                                fluidRow(
+                                  checkboxInput(ns("add_uorfs"), "uORF annotation", FALSE),
+                                  checkboxInput(ns("add_translon"), "Predicted translons", translons),
+                                  ),
+                                fluidRow(checkboxInput(ns("log_scale"), "Log scale", FALSE),
+                                         checkboxInput(ns("log_scale_protein"), "Log scale Protein", FALSE)
+                                ),
+                                fluidRow(
+                                  column(4, checkboxInput(ns("expression_plot"), "Gene expression plot", FALSE)),
+                                  column(4, checkboxInput(ns("useCustomRegions"), "Protein structures", TRUE)),
+                                ),
+                                fluidRow(column(4, checkboxInput(ns("phyloP"), "Conservation (phyloP)", FALSE)),
+                                         column(4, checkboxInput(ns("mapability"), "Mapability (28mers)", FALSE))),
+                                fluidRow(
+                                  column(6, checkboxInput(ns("withFrames"), "Split color Frames", TRUE)),
+                                  column(6, frame_subsetter_select(ns))
+                                ),
+                                fluidRow(
+                                  column(6, checkboxInput(ns("summary_track"), "Summary top track", FALSE)),
+                                  column(6, frame_type_select(ns, "summary_track_type", "Summary display type"))
+                                ),
+                                fluidRow(
+                                  column(4, downloadButton(ns("download_plot_html"), "Download HTML",
+                                               style = "width: 100%; font-size: 14px; font-weight: bold; background-color: #007bff; color: white; border-color: white !important;")),
+                                  column(4, export_format_of_plot(ns)),
+                                  column(4, uiOutput(ns("clip"))))
+              )
+            )
+      ))),
+      column(2, gene_input_select(ns, FALSE, browser_options)),
+      column(2, tx_input_select(ns, FALSE, all_isoforms, browser_options["default_isoform"])),
+      column(1, NULL, plot_button(ns("go"))),
+      column(1, prettySwitch(ns("viewMode"), "Genomic View", value = viewMode,
+                             status = "success", fill = TRUE, bigger = TRUE),
+                prettySwitch(ns("other_tx"), "Full annotation", value = full_annotation,
+                              status = "success", fill = TRUE, bigger = TRUE),
+                prettySwitch(ns("collapsed_introns"), "Collapse introns", value = FALSE,
+                             status = "success", fill = TRUE, bigger = TRUE))
+    ),
+    tags$hr(),
+    # ---- Full Width Main Panel ----
+    fluidRow(
+      column(12,
+             jqui_resizable(plotlyOutput(ns("c"), height = "500px")) %>% shinycssloaders::withSpinner(color="#0dc5c1"),
+             plotlyOutput(ns("e"), height = "50px"),
+             uiOutput(ns("proteinStruct")),
+             plotlyOutput(ns("d")) %>% shinycssloaders::withSpinner(color="#0dc5c1")
+      )
     )
   )
 }
+
+
 
 browser_server <- function(id, all_experiments, env, df, experiments,
                            tx, cds, libs, org, gene_name_list, rv,
@@ -76,27 +124,41 @@ browser_server <- function(id, all_experiments, env, df, experiments,
       output$clip <- renderUI({clipboard_url_button(input, session)})
 
       # Main plot controller, this code is only run if 'plot' is pressed
-      mainPlotControls <- eventReactive(input$go,
+      kickoff <- reactiveVal(FALSE)
+      fired <- reactiveVal(FALSE)
+      observeEvent(list(input$gene, input$tx), {
+        if (fired()) return()
+        if (!isTRUE(as.logical(browser_options[["plot_on_start"]]))) {
+          fired(TRUE)
+          return()
+        }
+        if (!nzchar(input$gene) || !nzchar(input$tx)) return()
+        if (!identical(input$gene, browser_options[["default_gene"]])) return()
+        if (!identical(input$tx,   browser_options[["default_isoform"]])) return()
+        fired(TRUE)
+        kickoff(TRUE)
+      }, ignoreInit = TRUE, ignoreNULL = TRUE)
+
+      mainPlotControls <- eventReactive(list(input$go, kickoff()),
         click_plot_browser_main_controller(input, tx, cds, libs, df),
-        ignoreInit = check_plot_on_start(browser_options),
+        ignoreInit = TRUE,
         ignoreNULL = FALSE)
 
       bottom_panel <- reactive(bottom_panel_shiny(mainPlotControls))  %>%
         bindCache(mainPlotControls()$hash_bottom) %>%
         bindEvent(mainPlotControls(), ignoreInit = FALSE, ignoreNULL = TRUE)
 
-      output$c <- renderPlotly(browser_track_panel_shiny(mainPlotControls, bottom_panel(), session)) %>%
+      browser_plot <- reactive(browser_track_panel_shiny(mainPlotControls, bottom_panel(), session)) %>%
         bindCache(mainPlotControls()$hash_browser) %>%
         bindEvent(bottom_panel(), ignoreInit = FALSE, ignoreNULL = TRUE)
 
+      output$c <- renderPlotly(browser_plot()) %>%
+        bindCache(mainPlotControls()$hash_browser) %>%
+        bindEvent(browser_plot(), ignoreInit = FALSE, ignoreNULL = TRUE)
 
-      # Protein display
-      module_protein(input, output, gene_name_list, session)
+      # Additional outputs
+      module_additional_browser(input, output, session)
 
-      output$d <- renderPlotly({
-        req(input$expression_plot == TRUE)
-        click_plot_boxplot(mainPlotControls, session)}) %>%
-          bindCache(mainPlotControls()$hash_expression)
       return(rv)
     }
   )

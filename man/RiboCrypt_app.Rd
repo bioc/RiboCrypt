@@ -32,11 +32,20 @@ path.}
 - default_gene : Which genes to select, default: first one\cr
 - default_isoform : Which isoform to select, default: first one\cr
 - default_libs : Which libraries to select: first one, else a single string,
-where libs are seperated by "|", like "RFP_WT_r1|RFP_WT_r2".\cr
+where libs are seperated by ",", like "RFP_WT_r1|RFP_WT_r2". Also support
+ run ids (SRR... etc)\cr
 - default_kmer : K-mer windowing size, default: 1\cr
 - default_frame_type : Ribo-seq line type, default: "lines"\cr
 - default_view_mode : "tx", alternative "genomic"
-- plot_on_start : Plot when starting, default: "FALSE"\cr}
+- default_experiment_meta : Which experiment to select for meta analysis,
+   default: first one\cr
+- default_gene_meta : Which genes to select for meta analysis,
+  default: first one\cr
+- default_isoform_meta : Which isoform to select for meta analysis,
+   default: first one\cr
+- translons : Use translon annotation, default "FALSE"\cr
+- plot_on_start : Plot when starting, default: "FALSE"\cr
+- hide_settings : Hide settings bar in browser on start, default "TRUE"\cr}
 
 \item{init_tab_focus}{character, default "browser". Which tab to open on
 init.}

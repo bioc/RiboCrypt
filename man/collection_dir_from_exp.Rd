@@ -4,12 +4,14 @@
 \alias{collection_dir_from_exp}
 \title{Get collection directory}
 \usage{
-collection_dir_from_exp(df, must_exists = FALSE)
+collection_dir_from_exp(df, must_exists = FALSE, new_format = TRUE)
 }
 \arguments{
 \item{df}{ORFik experiment}
 
 \item{must_exists}{logical, stop if dir does not exists}
+
+\item{new_format}{logical, TRUE is new or old fst format (FALSE)}
 }
 \value{
 file.path(resFolder(df), "collection_tables")

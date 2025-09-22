@@ -35,7 +35,7 @@ multiOmicsControllerView <- function() {
 
     if (length(lib_proportions) == 0) lib_proportions <- 1
     if (!(length(lib_proportions)  %in% c(1, length(reads)))) stop("length of lib_proportions must be 0, 1 or the same as reads list")
-    if (length(lib_proportions) == 1) lib_proportions <- rep(lib_proportions, length(reads))
+    if (length(lib_proportions) == 1) lib_proportions <- if (frames_type == "animate") {lib_proportions} else rep(lib_proportions, length(reads))
     lib_proportions <- lib_proportions / sum(lib_proportions)
     if (length(annotation_proportions) == 0) {
       if (display_sequence %in% c("none", FALSE)) {
@@ -55,7 +55,7 @@ multiOmicsControllerView <- function() {
 
     custom_seq_panel <- bottom_panel$custom_bigwig_panels
     if (!is.null(custom_seq_panel)) {
-      proportions <- c(proportions, 0.07)
+      proportions <- c(proportions, rep(0.07, length(custom_seq_panel)))
     }
     proportions <- proportions/sum(proportions)
   }
@@ -77,9 +77,7 @@ annotation_controller <- function(df, display_range, annotation, annotation_name
                                     but does not contain this region, did you specify cds on
                                     a non coding RNA or leader for mRNA without defined leader?")
   }
-  if (viewMode == "genomic") {
-    display_range <- flankPerGroup(display_range)
-  }
+
   seqlevels(display_range) <- seqlevels(annotation)
   display_range <- GRangesList(display_range)
 

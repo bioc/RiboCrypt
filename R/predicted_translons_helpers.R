@@ -1,17 +1,37 @@
 # Function to load data
 load_data <- function(species) {
   df <- read.experiment(species, validate = FALSE)
-  table_path <- file.path(dirname(df@fafile),
+  table_path <- file.path(refFolder(df),
                           "predicted_translons",
                           "predicted_translons_with_sequence.fst")
   if (file.exists(table_path)) {
-    translon_table <- setDT(fst::read_fst(table_path))
+    translon_table <- fst::read_fst(table_path, as.data.table = TRUE)
     setattr(translon_table, "exp", species)
   } else {
     NULL
   }
 
   reactiveValues(translon_table = translon_table, df = df)
+}
+
+# Function to load data
+load_data_umap <- function(species, color.by = NULL) {
+  df <- read.experiment(species, validate = FALSE)
+  dir <- file.path(refFolder(df), "UMAP")
+  table_path <- file.path(dir, "UMAP_by_gene_counts.fst")
+  if (file.exists(table_path)) {
+    dt_umap <- fst::read_fst(table_path, as.data.table = TRUE)
+    if (length(color.by) > 1) {
+      dt_umap[, color_column := do.call(paste, c(.SD, sep = " | ")), .SDcols = color.by]
+    } else dt_umap[, color_column := get(color.by)]
+
+    setattr(dt_umap, "exp", species)
+    setattr(dt_umap, "color.by", color.by)
+  } else {
+    stop("Species has no computed UMAP, pick another!")
+  }
+
+  reactiveValues(dt_umap = dt_umap, df = df)
 }
 
 # Generalized function to handle download trigger buttons.
@@ -21,7 +41,9 @@ load_data <- function(species) {
 handle_download_trigger <- function(input, output, current_format, trigger_input, download_button, md, session) {
   with(rlang::caller_env(), {
     observeEvent(input[[trigger_input]], {
-      if (is.null(md()) || isolate(input$dff) != name(md()$df)) md(load_data(isolate(input$dff)))
+      exp_to_use <- isolate(input$dff)
+      if (!isTruthy(exp_to_use)) exp_to_use <- browser_options["default_experiment_translon"]
+      if (is.null(md()) || exp_to_use != name(md()$df)) md(load_data(exp_to_use))
       req(md()$df)
       # For Excel, check that a table is available (otherwise abort)
       if (is.null(md()$translon_table)) {
@@ -68,6 +90,7 @@ generate_filename <- function(df, format, show_message = TRUE) {
 
 # Generalized function to render the DT table.
 render_translon_datatable <- function(data, session, add_links = TRUE) {
+  ns <- session$ns
   # Add URL
   if (add_links) {
     host <- getHostFromURL(session) #"https://ribocrypt.org"
@@ -86,32 +109,61 @@ render_translon_datatable <- function(data, session, add_links = TRUE) {
     data <- cbind(link = paste0('<a href=', urls, ' target=\"_blank\">',
                                 "Translon_", seq(length(urls)), '</a>'),
                   data)
+    if ("ID" %in% colnames(data)) {
+      data <- cbind(data[, .(link, ID)], data[, !(colnames(data) %in% c("link", "ID")), with = FALSE])
+    } else {
+      data <- cbind(data[, .(link)], ID = "", data[, !(colnames(data) %in% c("link", "ID")), with = FALSE])
+    }
   }
 
-  datatable(data,
-            extensions = 'Buttons',
-            escape = FALSE,
-            filter = "top",
-            options = list(
-              dom = 'Bfrtip',
-              buttons = list(
-                list(
-                  extend = "csv",
-                  text = "Download current page (CSV)",
-                  filename = "current",
-                  exportOptions = list(
-                    modifier = list(page = "current")
-                  )
-                ),
-                list(
-                  extend = "excel",
-                  text = "Download current page (Excel)",
-                  filename = "current",
-                  exportOptions = list(
-                    modifier = list(page = "current")
-                  )
-                )
-              )
-            )
+  # Which column is ID?
+  id_target <- which(names(data) == "ID")
+  if (length(id_target) != 1) stop("ID column not found or ambiguous")
+
+  datatable(
+    data,
+    escape = FALSE,
+    filter = "top",
+    rownames = FALSE,
+    selection = "none",
+    extensions = "Buttons",
+    options = list(
+      dom = "Bfrtip",
+      buttons = list(
+        list(
+          extend = "csv",
+          text = "Download current page (CSV)",
+          filename = "current",
+          exportOptions = list(modifier = list(page = "current"))
+        ),
+        list(
+          extend = "excel",
+          text = "Download current page (Excel)",
+          filename = "current",
+          exportOptions = list(modifier = list(page = "current"))
+        )
+      ),
+      # Tag the ID column's cells so we can bind a click handler only there
+      columnDefs = list(list(
+        targets = id_target - 1,     # DataTables is 0-based
+        className = "dt-id"
+      ))
+    ),
+    # JS callback: fire event when clicking on ID cells
+    callback = DT::JS(sprintf("
+      var tbl = table.table().node();
+      $(tbl).on('click.dt', 'td.dt-id', function() {
+        var info    = table.cell(this).index();         // {row, column}
+        var rowData = table.row(info.row).data();       // array of cell values
+        var theID   = rowData[info.column];             // value in ID cell
+
+        // send to Shiny (module-safe)
+        Shiny.setInputValue('%s', {
+          id:  theID,
+          row: info.row + 1,
+          col: info.column + 1
+        }, {priority: 'event'});
+      });
+    ", ns("translon_id_click")))
   )
 }

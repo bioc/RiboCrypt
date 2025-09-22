@@ -21,7 +21,7 @@ experiment_input_select <- function(names, ns, browser_options = NULL,
   selectizeInput(
     inputId = ns("dff"),
     label = "Select an experiment",
-    choices = names,
+    choices = as.character(browser_options[option_name]),
     selected = browser_options[option_name],
     multiple = FALSE
   )
@@ -56,21 +56,27 @@ tx_input_select <- function(ns, multiple = FALSE, choices = NULL,
 }
 
 library_input_select <- function(ns, multiple = TRUE, choices = "",
-                                 selected = choices[1],
+                                 selected = if (is(choices, "data.frame")) {
+                                   choices[1, , drop = FALSE]
+                                 } else {
+                                   choices[1]
+                                   },
                                  label = "Select libraries", id = "library") {
   selectizeInput(
     inputId = ns(id),
     label = label,
     choices = choices,
     selected = selected,
-    multiple = multiple
+    multiple = multiple,
+    width = "100%",
+    options = list(plugins = list("remove_button"))
   ) %>%
     helper(onclick = "fakeClick('tutorial', 'lib')")
 }
 
 motif_input_select <- function(ns, multiple = FALSE, browser_options = NULL,
                               choices = NULL,
-                              label = "Select a meta motif",
+                              label = "or Select a meta motif",
                               id = "motif",
                               selected = NULL) {
   selectizeInput(
@@ -89,7 +95,7 @@ frame_type_select <- function(ns, name = "frames_type",
   selectizeInput(
     inputId = ns(name),
     label = label,
-    choices = c("lines", "columns", "stacks", "area", "heatmap"),
+    choices = c("lines", "columns", "stacks", "area", "heatmap", "animate"),
     selected = selected,
     multiple = FALSE
   ) %>%
@@ -110,7 +116,7 @@ frame_subsetter_select <- function(ns, name = "frames_subset",
 }
 
 region_view_select <- function(ns, name, label,
-                               selected = "mrna") {
+                               selected = "leader+cds") {
   selectizeInput(
     inputId = ns(name),
     label = label,
@@ -120,12 +126,13 @@ region_view_select <- function(ns, name, label,
   )
 }
 
-heatmap_region_select <- function(ns) {
+heatmap_region_select <- function(ns, add = NULL) {
+  choices <- c("Start codon", "Stop codon", add)
   selectizeInput(
     inputId = ns("region"),
-    label = "View region",
-    choices = c("Start codon", "Stop codon"),
-    selected = "Start codon",
+    label = "Anchor region",
+    choices = choices,
+    selected = choices[1],
     multiple = FALSE
   )
 }
@@ -168,11 +175,11 @@ codon_score_input_select <- function(ns) {
   )
 }
 
-codon_filter_input_select <- function(ns) {
+codon_filter_input_select <- function(ns, value = 1000) {
   numericInput(
     inputId = ns("codon_filter_value"),
     label = "Codon filter value",
-    value = 1000,
+    value = value,
     min = 0,
     max = NA,
     step = NA
@@ -202,10 +209,10 @@ export_format_of_plot <- function(ns) {
   )
 }
 
-condition_input_select <- function(ns, multiple = TRUE) {
+factor_input_select <- function(ns, multiple = FALSE) {
   selectizeInput(
-    inputId = ns("condition"),
-    label = "Select two conditions",
+    inputId = ns("factor"),
+    label = "Select factor",
     choices = "",
     selected = "",
     multiple = multiple
@@ -213,12 +220,21 @@ condition_input_select <- function(ns, multiple = TRUE) {
     helper(onclick = "fakeClick('tutorial', 'diffexp')")
 }
 
+condition_input_select <- function(ns, multiple = TRUE) {
+  selectizeInput(
+    inputId = ns("condition"),
+    label = "Select two levels (contrast)",
+    choices = "",
+    selected = "",
+    multiple = multiple
+  )
+}
+
 metadata_input_select <- function(ns, metadata,
                                   multiple = FALSE, browser_options = NULL,
                                   choices = colnames(metadata), selected = "TISSUE",
                                   label = "Order on:", id = "metadata",
                                   add = NULL) {
-  choices <- choices[-which(choices %in% "Run")]
   choices <- c(choices, add)
   selectizeInput(
     inputId = ns(id),
@@ -230,5 +246,34 @@ metadata_input_select <- function(ns, metadata,
   )
   #  %>%
   #   helper(onclick = "fakeClick('tutorial', 'metadata')")
+}
+
+umap_color_by_input_select <- function(ns, names = "auto",
+                                       browser_options = NULL,
+                                       option_name = "default_experiment") {
+  if (names == "auto") {
+    names <- c('Tissue' = "tissue", 'Cell line' = "cell_line",
+               'Inhibitor' = "inhibitors", 'BioProject' = "BioProject",
+               'Author' = "author")
+  }
+  selectizeInput(
+    inputId = ns("umap_col"),
+    label = "Color on",
+    choices = names,
+    selected = names[seq(2)],
+    multiple = TRUE
+  )
+}
+
+umap_plot_type <- function(ns, names = c("UMAP", "UMAP centroids"),
+                           browser_options = NULL,
+                           option_name = "default_experiment") {
+  selectizeInput(
+    inputId = ns("umap_plot_type"),
+    label = "Plot type",
+    choices = names,
+    selected = names[1],
+    multiple = FALSE
+  )
 }
 
